@@ -1,3 +1,11 @@
+/**
+ * Abstract Code: simplistic async code animation written in typescript
+ *
+ * @author Jacob Zwang
+ * status: not ready for use
+ * todo: npm package, procedural code generation, color pallets, documentation
+ */
+
 type options = {
   segmentCornerRadius?: number;
   segmentHeight?: number;
@@ -102,7 +110,7 @@ export default function applyAbstractCode(
       );
     }
 
-    // calculates distance before the word it is given
+    // calculates distance before the given word
     function previousSegmentsTotal(line: line, currentSegmentNum: number) {
       let sum = 0;
       for (let segmentNum = 0; segmentNum < currentSegmentNum; segmentNum++) {
