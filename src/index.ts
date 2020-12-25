@@ -1,182 +1,199 @@
-AbstractCode(document.getElementById("canvas"), 5);
+type options = {
+  segmentCornerRadius?: number;
+  segmentHeight?: number;
+  lineHeight?: number;
+  linesShown?: number;
+  segmentAnimationSpeed?: number;
+  scrollSpeed?: number;
+  segmentSpacing?: number;
+};
+type lines = Array<line>;
+type line = Array<segment>;
+type segment = [length, color];
+type length = number;
+type color = string;
+type canvas = {
+  segment: (
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    color: string
+  ) => void;
 
-function AbstractCode(canvas, radius) {
-  const lineHeight = 20;
-  const lineSpacing = 40;
-  const linesShown = 4;
-  const speed = 10;
-  const shiftLineSpeed = 4;
+  clear: () => void;
+};
+type code = {
+  drawStaticLine: (lineNumber: number, translationY?: number) => void;
+  drawAnimatedSegment: (lineNum: number, segmentNum: number) => Promise<void>;
+};
 
-  canvas = (() => {
-    const ctx = canvas.getContext("2d");
-    const canvasHeight = lineSpacing * linesShown - lineHeight / 2;
-    const canvasWidth = 1000;
-    const adjustedRadius = (height) => radius * (height / lineHeight);
+export default function applyAbstractCode(
+  target: HTMLCanvasElement,
+  options: options,
+  lines: lines
+): void {
+  const safeOptions = {
+    segmentCornerRadius: options.segmentCornerRadius ?? 5,
+    segmentHeight: options.segmentHeight ?? 20,
+    lineHeight: options.lineHeight ?? 40,
+    linesShown: options.linesShown ?? 4,
+    segmentAnimationSpeed: options.segmentAnimationSpeed ?? 10,
+    scrollSpeed: options.scrollSpeed ?? 4,
+    segmentSpacing: options.segmentSpacing ?? 10,
+  };
+  const canvas = ((target: HTMLCanvasElement): canvas => {
+    const ctx =
+      target.getContext("2d") ??
+      (() => {
+        throw "Failed to get canvas context. Is the target of type HTMLCanvasElement?";
+      })();
     return {
-      segment(x, y, width, height, color) {
+      // draws a colored block at given location and size
+      segment(
+        x: number,
+        y: number,
+        width: number,
+        height: number,
+        color: string
+      ) {
+        // adjusts radius during animation to avoid artifacting
+        const adjustedRadius: number =
+          safeOptions.segmentCornerRadius *
+          (height / safeOptions.segmentHeight);
         ctx.beginPath();
         ctx.fillStyle = color;
-        ctx.moveTo(x + adjustedRadius(height), y);
-        ctx.lineTo(x + width - adjustedRadius(height), y);
-        ctx.quadraticCurveTo(
-          x + width,
-          y,
-          x + width,
-          y + adjustedRadius(height)
-        );
-        ctx.lineTo(x + width, y + height - adjustedRadius(height));
+        ctx.moveTo(x + adjustedRadius, y);
+        ctx.lineTo(x + width - adjustedRadius, y);
+        ctx.quadraticCurveTo(x + width, y, x + width, y + adjustedRadius);
+        ctx.lineTo(x + width, y + height - adjustedRadius);
         ctx.quadraticCurveTo(
           x + width,
           y + height,
-          x + width - adjustedRadius(height),
+          x + width - adjustedRadius,
           y + height
         );
-        ctx.lineTo(x + adjustedRadius(height), y + height);
-        ctx.quadraticCurveTo(
-          x,
-          y + height,
-          x,
-          y + height - adjustedRadius(height)
-        );
-        ctx.lineTo(x, y + adjustedRadius(height));
-        ctx.quadraticCurveTo(x, y, x + adjustedRadius(height), y);
+        ctx.lineTo(x + adjustedRadius, y + height);
+        ctx.quadraticCurveTo(x, y + height, x, y + height - adjustedRadius);
+        ctx.lineTo(x, y + adjustedRadius);
+        ctx.quadraticCurveTo(x, y, x + adjustedRadius, y);
         ctx.closePath();
         ctx.fill();
       },
+      // clears the entire canvas
       clear() {
-        ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+        ctx.clearRect(0, 0, target.width, target.height);
       },
     };
-  })();
+  })(target);
 
-  const lines = [
-    [
-      [200, "red"],
-      [150, "green"],
-      [300, "green"],
-      [80, "green"],
-    ],
-    [
-      [70, "rgba(0,0,0,0)"],
-      [200, "gray"],
-      [150, "green"],
-      [130, "green"],
-    ],
-    [
-      [70, "rgba(0,0,0,0)"],
-      [130, "red"],
-      [200, "green"],
-      [180, "green"],
-    ],
-    [
-      [140, "rgba(0,0,0,0)"],
-      [130, "gray"],
-      [70, "green"],
-      [100, "green"],
-    ],
-    [
-      [140, "rgba(0,0,0,0)"],
-      [60, "red"],
-      [90, "green"],
-      [120, "green"],
-    ],
-    [
-      [70, "rgba(0,0,0,0)"],
-      [120, "red"],
-      [150, "green"],
-    ],
-    [
-      [70, "rgba(0,0,0,0)"],
-      [90, "red"],
-      [120, "green"],
-      [150, "green"],
-    ],
-  ];
+  const code = ((canvas: canvas): code => {
+    function drawStaticSegment(
+      lineNum: number,
+      segmentNum: number,
+      translationY: number
+    ) {
+      canvas.segment(
+        previousSegmentsTotal(lines[lineNum], segmentNum),
+        lineNum * safeOptions.lineHeight - 1 - translationY + 5,
+        lines[lineNum][segmentNum][0] - 1,
+        safeOptions.segmentHeight,
+        lines[lineNum][segmentNum][1]
+      );
+    }
 
-  (async function loopLines() {
-    await new Promise((resolve: (value: void) => void): void => {
-      (async () => {
-        for (let count = 0; count < linesShown - 1; count++) {
-          drawStaticLine(count);
-        }
-        for (const j in lines[linesShown - 1]) {
-          await drawAnimatedSegment(linesShown - 1, j);
-        }
-        (function shiftLineUp(i) {
-          canvas.clear();
-          for (let count = 0; count < linesShown; count++) {
-            for (const j in lines[count]) {
-              drawStaticSegment(count, j, i);
+    // calculates distance before the word it is given
+    function previousSegmentsTotal(line: line, currentSegmentNum: number) {
+      let sum = 0;
+      for (let segmentNum = 0; segmentNum < currentSegmentNum; segmentNum++) {
+        sum = sum + line[segmentNum][0] + safeOptions.segmentSpacing;
+      }
+      return sum;
+    }
+
+    return {
+      drawStaticLine(lineNumber: number, translationY?: number): void {
+        const checkedTranslationY =
+          typeof translationY !== "number" ? 0 : translationY;
+        lines[lineNumber].forEach((value, segmentNum): void => {
+          drawStaticSegment(lineNumber, segmentNum, checkedTranslationY);
+        });
+      },
+
+      drawAnimatedSegment(lineNum: number, segmentNum: number): Promise<void> {
+        return new Promise((resolve: (value: void) => void): void => {
+          function animateSegment(lineMultiplier: number): void {
+            canvas.segment(
+              previousSegmentsTotal(lines[lineNum], segmentNum),
+              lineNum * safeOptions.lineHeight +
+                safeOptions.segmentHeight / 2 -
+                (safeOptions.segmentHeight *
+                  (lineMultiplier / safeOptions.segmentAnimationSpeed)) /
+                  2 +
+                5,
+              lines[lineNum][segmentNum][0] *
+                (lineMultiplier / safeOptions.segmentAnimationSpeed),
+              safeOptions.segmentHeight *
+                (lineMultiplier / safeOptions.segmentAnimationSpeed),
+              lines[lineNum][segmentNum][1]
+            );
+
+            if (lineMultiplier < safeOptions.segmentAnimationSpeed) {
+              requestAnimationFrame(() => {
+                animateSegment(lineMultiplier + 1);
+                if (
+                  lineMultiplier ===
+                  safeOptions.segmentAnimationSpeed *
+                    (1 - 1 / safeOptions.segmentAnimationSpeed)
+                ) {
+                  resolve();
+                }
+              });
             }
           }
-          if (i <= lineSpacing) {
+          requestAnimationFrame(() => {
+            animateSegment(0);
+          });
+        });
+      },
+    };
+  })(canvas);
+
+  (async function loopLines(): Promise<void> {
+    await new Promise((resolve: (value: void) => void): void => {
+      (async () => {
+        for (let lineNum = 0; lineNum < safeOptions.linesShown - 1; lineNum++) {
+          code.drawStaticLine(lineNum);
+        }
+        for (
+          let segmentNum = 0;
+          segmentNum < lines[safeOptions.linesShown - 1].length;
+          segmentNum++
+        ) {
+          await code.drawAnimatedSegment(
+            safeOptions.linesShown - 1,
+            segmentNum
+          );
+        }
+        // recursively moves all lines up
+        (function scroll(distanceTraveled: number): void {
+          canvas.clear();
+          for (let lineNum = 0; lineNum < safeOptions.linesShown; lineNum++) {
+            code.drawStaticLine(lineNum, distanceTraveled);
+          }
+          if (distanceTraveled <= safeOptions.lineHeight) {
             requestAnimationFrame(() => {
-              shiftLineUp(i + shiftLineSpeed);
-              if (i === lineSpacing) {
+              scroll(distanceTraveled + safeOptions.scrollSpeed);
+              if (distanceTraveled === safeOptions.lineHeight) {
                 resolve();
               }
             });
           }
         })(0);
       })();
-    }).then(() => {
-      lines.push(lines.shift());
+    }).then((): void => {
+      lines.push(lines.shift() as line);
       loopLines();
     });
   })();
-
-  function drawStaticLine(lineNumber) {
-    for (const segment in lines[lineNumber]) {
-      drawStaticSegment(lineNumber, segment, 0);
-    }
-  }
-
-  function drawStaticSegment(i, j, yTransformer) {
-    canvas.segment(
-      previousSegmentsTotal(lines[i], j),
-      i * lineSpacing - 1 - yTransformer + 5,
-      lines[i][j][0] - 1,
-      lineHeight,
-      lines[i][j][1]
-    );
-  }
-
-  function drawAnimatedSegment(i, j) {
-    return new Promise((resolve) => {
-      function animateSegment(lineMultiplier) {
-        canvas.segment(
-          previousSegmentsTotal(lines[i], j),
-          i * lineSpacing +
-            lineHeight / 2 -
-            (lineHeight * (lineMultiplier / speed)) / 2 +
-            5,
-          lines[i][j][0] * (lineMultiplier / speed),
-          lineHeight * (lineMultiplier / speed),
-          lines[i][j][1]
-        );
-
-        if (lineMultiplier < speed) {
-          requestAnimationFrame(() => {
-            animateSegment(lineMultiplier + 1);
-            if (lineMultiplier === speed * (1 - 1 / speed)) {
-              resolve();
-            }
-          });
-        }
-      }
-      requestAnimationFrame(() => {
-        animateSegment(0);
-      });
-    });
-  }
-
-  function previousSegmentsTotal(line, i) {
-    let sum = 0;
-    for (const j in line) {
-      if (j < i) {
-        sum = sum + line[j][0] + 10;
-      }
-    }
-    return sum;
-  }
 }
